@@ -1,0 +1,58 @@
+name: Reviews feed
+
+on:
+  schedule:
+    # 03:20 UTC nightly (04:20 BST). Odd minute on purpose - GitHub throttles :00 crons.
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fetch and build the feed but do NOT write to Shopify"
+        type: boolean
+        default: false
+
+concurrency:
+  group: reviews-feed
+  cancel-in-progress: false
+
+jobs:
+  build-and-write:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build feed and write metafield
+        env:
+          DRY_RUN: ${{ inputs.dry_run == true && '1' || '' }}
+          # --- Shopify (custom app created in the Dev Dashboard) ---
+          SHOPIFY_STORE: pruden-smith.myshopify.com
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          SHOPIFY_SHOP_GID: gid://shopify/Shop/61432168645
+          SHOPIFY_API_VERSION: "2026-07"
+          # --- Okendo (public storefront API, no key) ---
+          OKENDO_SUBSCRIBER_ID: 02731d17-72f5-4285-8ba0-69bea3ccdd7e
+          # --- Google score + count (Places API New, key only) ---
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          GOOGLE_PLACE_ID: ${{ secrets.GOOGLE_PLACE_ID }}
+          GOOGLE_REVIEWS_URL: https://g.page/r/CaxvmN9j1t8AEAE/review
+          # --- Google review TEXT (Business Profile API v4) - leave unset until approved ---
+          GBP_CLIENT_ID: ${{ secrets.GBP_CLIENT_ID }}
+          GBP_CLIENT_SECRET: ${{ secrets.GBP_CLIENT_SECRET }}
+          GBP_REFRESH_TOKEN: ${{ secrets.GBP_REFRESH_TOKEN }}
+          GBP_ACCOUNT_ID: ${{ secrets.GBP_ACCOUNT_ID }}
+          GBP_LOCATION_ID: ${{ secrets.GBP_LOCATION_ID }}
+          # --- Feed shape ---
+          FEED_MAX_RECENT: "200"
+          FEED_MAX_FEATURED: "6"
+        run: node src/index.mjs
+      - name: Upload feed artifact (what was built, whether or not it was written)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviews-feed
+          path: out/feed.json
+          retention-days: 14

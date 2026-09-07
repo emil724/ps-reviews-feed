@@ -45,17 +45,26 @@ async function main() {
     throw new Error(`ABORT: Okendo returned ${onsite.length} reviews but the live feed has ${prevOnsite}. Refusing to write.`);
   }
 
-  // ---- 6. Build ----
-  const feed = buildFeed({
+  // ---- 6. Build (and shrink until it fits Shopify's 128 KB metafield limit) ----
+  const MAX_BYTES = Number(env('FEED_MAX_BYTES', '125000')); // Shopify hard limit is 131072; keep headroom
+  const bytes = (f) => Buffer.byteLength(JSON.stringify(f), 'utf8');
+  let maxRecent = Number(env('FEED_MAX_RECENT', '200'));
+  const build = () => buildFeed({
     onsite, google,
     placesSummary: places || (prevGoogle ? { count: prevGoogle.count, average: prevGoogle.average } : null),
     googleReviewsUrl: env('GOOGLE_REVIEWS_URL'),
-    maxRecent: Number(env('FEED_MAX_RECENT', '200')),
+    maxRecent,
     maxFeatured: Number(env('FEED_MAX_FEATURED', '6')),
   });
+  let feed = build();
+  while (bytes(feed) > MAX_BYTES && maxRecent > 20) {
+    maxRecent -= 10;
+    feed = build();
+  }
+  if (bytes(feed) > MAX_BYTES) throw new Error(`ABORT: feed is ${bytes(feed)} bytes even at ${maxRecent} recent reviews.`);
   await mkdir('out', { recursive: true });
   await writeFile('out/feed.json', JSON.stringify(feed, null, 2));
-  log(`Built: ${feed.summary.total} total, ${feed.summary.average} weighted, ${feed.featured.length} featured, ${feed.reviews.length} recent, ${JSON.stringify(feed).length} bytes`);
+  log(`Built: ${feed.summary.total} total, ${feed.summary.average} weighted, ${feed.featured.length} featured, ${feed.reviews.length} recent, ${bytes(feed)} bytes`);
   log('Featured:', feed.featured.map(r => `${r.author} (${r.body.length} chars${r.product ? ', ' + r.product.handle : ', service'})`).join(' | '));
 
   if (DRY) { log('DRY RUN - not writing.'); return; }

@@ -25,7 +25,25 @@ export function pickFeatured(reviews, max) {
   return out;
 }
 
+// Okendo occasionally holds the same review twice (customer hit submit twice):
+// same text, different IDs, sometimes a slightly different name ("Joanne" /
+// "Joanne P."). Long text is unique enough on its own; short text ("Love it")
+// needs the name too. Keep the first (newest) of each.
+export function dedupe(reviews) {
+  const seen = new Set();
+  const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return reviews.filter(r => {
+    const body = norm(r.body);
+    const key = body.length >= 60 ? `${r.source}|${body}` : `${r.source}|${norm(r.author)}|${body}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function buildFeed({ onsite, google, placesSummary, googleReviewsUrl, maxRecent, maxFeatured }) {
+  onsite = dedupe(onsite);
+  google = dedupe(google);
   const all = [...onsite, ...google].filter(r => r.body && r.rating > 0);
   all.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
 

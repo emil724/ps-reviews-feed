@@ -1,0 +1,12 @@
+{
+  "name": "ps-reviews-feed",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Nightly job: pulls Pruden & Smith reviews from Okendo (and Google, once approved), normalises them, and writes shop.metafields.reviews.feed on Shopify.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "run": "node src/index.mjs",
+    "dry": "DRY_RUN=1 node src/index.mjs"
+  }
+}
